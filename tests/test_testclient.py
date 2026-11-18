@@ -672,6 +672,29 @@ def test_ipv6_base_url(
     assert response.json() == {"server": server, "host": host}
 
 
+@pytest.mark.parametrize(
+    ("base_url", "url", "expected_url"),
+    [
+        ("http://example.com", "/ws", "ws://example.com/ws"),
+        ("https://example.com:8443", "/ws?a=1", "wss://example.com:8443/ws?a=1"),
+        ("http://testserver/api/v1/", "/ws", "ws://testserver/api/v1/ws"),
+        ("http://example.com", "ws://other.com/ws", "ws://other.com/ws"),
+    ],
+)
+def test_websocket_connect_uses_base_url(
+    test_client_factory: TestClientFactory, base_url: str, url: str, expected_url: str
+) -> None:
+    async def app(scope: Scope, receive: Receive, send: Send) -> None:
+        websocket = WebSocket(scope, receive=receive, send=send)
+        await websocket.accept()
+        await websocket.send_text(str(websocket.url))
+        await websocket.close()
+
+    client = test_client_factory(app, base_url=base_url)
+    with client.websocket_connect(url) as websocket:
+        assert websocket.receive_text() == expected_url
+
+
 def test_websocket_raw_path_without_params(test_client_factory: TestClientFactory) -> None:
     async def app(scope: Scope, receive: Receive, send: Send) -> None:
         websocket = WebSocket(scope, receive=receive, send=send)

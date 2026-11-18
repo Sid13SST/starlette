@@ -10,7 +10,7 @@ from concurrent.futures import Future, wait as wait_futures
 from contextlib import AbstractContextManager
 from types import GeneratorType
 from typing import TYPE_CHECKING, Any, Literal, Self, TypedDict, TypeGuard, cast
-from urllib.parse import unquote, urljoin
+from urllib.parse import unquote
 
 import anyio
 import anyio.abc
@@ -537,7 +537,9 @@ class TestClient(httpx.Client):
         subprotocols: Sequence[str] | None = None,
         **kwargs: Any,
     ) -> WebSocketTestSession:
-        url = urljoin("ws://testserver", url)
+        merged_url = self._merge_url(url)
+        if merged_url.scheme in ("http", "https"):
+            merged_url = merged_url.copy_with(scheme={"http": "ws", "https": "wss"}[merged_url.scheme])
         headers = kwargs.get("headers", {})
         headers.setdefault("connection", "upgrade")
         headers.setdefault("sec-websocket-key", "testserver==")
@@ -546,7 +548,7 @@ class TestClient(httpx.Client):
             headers.setdefault("sec-websocket-protocol", ", ".join(subprotocols))
         kwargs["headers"] = headers
         try:
-            super().request("GET", url, **kwargs)
+            super().request("GET", merged_url, **kwargs)
         except _Upgrade as exc:
             session = exc.session
         else:
